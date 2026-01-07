@@ -1,0 +1,3 @@
+0 virus mosaico
+1 mancha bacteriana
+2 Tomate saludable

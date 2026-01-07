@@ -1,0 +1,6 @@
+0 Araña roja
+1 Cercospora
+2 Minero
+3 Phoma
+4 Roya de la hoja
+5 Saludable

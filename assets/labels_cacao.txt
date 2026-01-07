@@ -1,0 +1,3 @@
+0 Barrenador
+1 Podredumbre negra
+2 Saludable

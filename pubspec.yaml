@@ -1,0 +1,88 @@
+name: amgeca
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Base de datos
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  sqflite_common_ffi: ^2.3.0
+  
+  # Utilidades
+  intl: ^0.18.1
+  provider: ^6.1.1
+  shared_preferences: ^2.2.2
+  crypto: ^3.0.3
+
+  # IA OFFLINE
+  image: ^4.1.7
+  tflite_flutter: ^0.11.0
+
+  # Para tomar/seleccionar fotos
+  image_picker: ^1.0.7  
+  path_provider: ^2.1.1
+
+  # Para seleccionar archivos
+  file_picker: ^8.0.0+1
+
+  # DeepSeek
+  http: ^1.1.1
+
+  # 🆕 CLIMA Y GPS
+  geocoding: ^3.0.0 
+  geolocator: ^11.0.0
+  permission_handler: ^11.0.1
+  flutter_local_notifications: ^17.0.0
+
+  fl_chart: ^0.69.0
+  syncfusion_flutter_charts: ^28.1.35
+
+  # PDF Viewer
+  flutter_pdfview: ^1.3.0
+
+  # Video Player
+  video_player: ^2.8.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "android/assets/images/logo.png"
+  min_sdk_android: 21
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/modelo_tomate.tflite
+    - assets/labels_tomate.txt
+    - assets/modelo_platano.tflite
+    - assets/labels_platano.txt
+    - assets/modelo_cafe.tflite
+    - assets/labels_cafe.txt
+    - assets/modelo_cacao.tflite
+    - assets/labels_cacao.txt
+    - assets/modelo_maiz.tflite
+    - assets/labels_maiz.txt
+    - assets/modelo_arroz.tflite
+    - assets/labels_arroz.txt
+    - assets/manual_usuario.pdf
+    - assets/videos/
+    - assets/guias/
+    - assets/guias/cacao_guia.pdf
+    - assets/guias/cafe_guia.pdf
+    - assets/guias/maiz_guia.pdf
+    - assets/guias/platano_guia.pdf
+    - assets/guias/tomate_guia.pdf

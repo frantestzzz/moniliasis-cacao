@@ -1,0 +1,4 @@
+0 Mancha gris
+1 Roya común
+2 Tizón
+3 Saludable

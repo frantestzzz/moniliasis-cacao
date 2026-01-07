@@ -1,0 +1,6 @@
+0 Escaldadura de la hoja
+1 Mancha marrón
+2 Saludable
+3 Tizón bacteriano
+4 Tizón de la hoja
+5 Tizón de la vaina
