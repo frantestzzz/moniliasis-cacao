@@ -111,7 +111,7 @@ class _ReportesPageState extends State<ReportesPage> {
       });
 
       debugPrint(
-        '✅ Modelo ${cultivo.nombre} cargado: ${_labels.length} clases',
+        '✅ Modelo ${cultivo.nombre} cargado: listo para detectar moniliasis',
       );
       debugPrint('🔍 Input shape: $inputShape');
     } catch (e) {
@@ -449,7 +449,7 @@ class _ReportesPageState extends State<ReportesPage> {
                           const SizedBox(width: 8),
                           Text(
                             _modeloListo
-                                ? '${_cultivoSeleccionado!.nombre}: ${_labels.length} enfermedades'
+                                ? '${_cultivoSeleccionado!.nombre}: detección de moniliasis activado'
                                 : 'Cargando modelo...',
                             style: TextStyle(
                               color: _modeloListo
