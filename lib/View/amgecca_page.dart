@@ -52,6 +52,16 @@ class _ReportesPageState extends State<ReportesPage> {
   double? _confianza;
   Interpreter? _interpreter;
   List<String> _labels = [];
+  int _inputWidth = 224;
+  int _inputHeight = 224;
+  int _inputChannels = 3;
+  bool _inputIsNchw = false;
+
+  @override
+  void initState() {
+    super.initState();
+    cargarModelo(_cultivoCacao);
+  }
 
   @override
   void initState() {
@@ -80,6 +90,21 @@ class _ReportesPageState extends State<ReportesPage> {
     try {
       final modelData = await rootBundle.load('assets/models/best.tflite');
       _interpreter = Interpreter.fromBuffer(modelData.buffer.asUint8List());
+      final inputTensor = _interpreter!.getInputTensor(0);
+      final inputShape = inputTensor.shape;
+      if (inputShape.length == 4) {
+        if (inputShape[1] == 3) {
+          _inputIsNchw = true;
+          _inputChannels = inputShape[1];
+          _inputHeight = inputShape[2];
+          _inputWidth = inputShape[3];
+        } else {
+          _inputIsNchw = false;
+          _inputHeight = inputShape[1];
+          _inputWidth = inputShape[2];
+          _inputChannels = inputShape[3];
+        }
+      }
 
       final labelsData = await rootBundle.loadString(cultivo.labelsPath);
       _labels = labelsData
@@ -95,6 +120,7 @@ class _ReportesPageState extends State<ReportesPage> {
       debugPrint(
         '✅ Modelo ${cultivo.nombre} cargado: ${_labels.length} clases',
       );
+      debugPrint('🔍 Input shape: $inputShape');
     } catch (e) {
       debugPrint('❌ Error cargando ${cultivo.nombre}: $e');
       setState(() {
@@ -140,34 +166,73 @@ class _ReportesPageState extends State<ReportesPage> {
         return;
       }
 
-      final resized = img.copyResize(image, width: 224, height: 224);
-
-      var input = List.generate(
-        1,
-        (_) => List.generate(
-          224,
-          (y) => List.generate(224, (x) {
-            final pixel = resized.getPixel(x, y);
-            return [pixel.r / 255.0, pixel.g / 255.0, pixel.b / 255.0];
-          }),
-        ),
+      final resized = img.copyResize(
+        image,
+        width: _inputWidth,
+        height: _inputHeight,
       );
 
-      var output = List.filled(
-        _labels.length,
-        0.0,
-      ).reshape([1, _labels.length]);
+      dynamic input;
+      if (_inputIsNchw) {
+        input = List.generate(
+          1,
+          (_) => List.generate(
+            _inputChannels,
+            (c) => List.generate(_inputHeight, (y) {
+              return List.generate(_inputWidth, (x) {
+                final pixel = resized.getPixel(x, y);
+                if (c == 0) return pixel.r / 255.0;
+                if (c == 1) return pixel.g / 255.0;
+                return pixel.b / 255.0;
+              });
+            }),
+          ),
+        );
+      } else {
+        input = List.generate(
+          1,
+          (_) => List.generate(
+            _inputHeight,
+            (y) => List.generate(_inputWidth, (x) {
+              final pixel = resized.getPixel(x, y);
+              return [pixel.r / 255.0, pixel.g / 255.0, pixel.b / 255.0];
+            }),
+          ),
+        );
+      }
+
+      final outputTensor = _interpreter!.getOutputTensor(0);
+      final outputShape = outputTensor.shape;
+      final outputSize = outputShape.fold<int>(1, (a, b) => a * b);
+      var output = List.filled(outputSize, 0.0).reshape(outputShape);
 
       _interpreter!.run(input, output);
 
-      final results = (output[0] as List).cast<double>();
       int maxIdx = 0;
-      double maxConf = results[0];
+      double maxConf = 0.0;
 
-      for (int i = 1; i < results.length; i++) {
-        if (results[i] > maxConf) {
-          maxConf = results[i];
-          maxIdx = i;
+      if (outputShape.length == 2 && outputShape[1] == _labels.length) {
+        final results = (output[0] as List).cast<double>();
+        for (int i = 0; i < results.length; i++) {
+          if (results[i] > maxConf) {
+            maxConf = results[i];
+            maxIdx = i;
+          }
+        }
+      } else if (outputShape.length == 3 &&
+          outputShape[2] >= 5 + _labels.length) {
+        final detections = output[0] as List;
+        for (final det in detections) {
+          if (det is! List || det.length < 5 + _labels.length) continue;
+          final objectness = (det[4] as num).toDouble();
+          for (int c = 0; c < _labels.length; c++) {
+            final classScore = (det[5 + c] as num).toDouble();
+            final score = objectness * classScore;
+            if (score > maxConf) {
+              maxConf = score;
+              maxIdx = c;
+            }
+          }
         }
       }
 
