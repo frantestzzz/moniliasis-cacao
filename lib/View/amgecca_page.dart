@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
+import 'dart:math' as Math;
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'recomendaciones_helper.dart';
@@ -25,6 +26,105 @@ class Cultivo {
     required this.icono,
     required this.modeloPath,
     required this.labelsPath,
+  });
+}
+
+class _Detection {
+  final Rect box;
+  final int classId;
+  final double score;
+
+  const _Detection({
+    required this.box,
+    required this.classId,
+    required this.score,
+  });
+}
+
+class _DetectionPainter extends CustomPainter {
+  final List<_Detection> detections;
+  final List<String> labels;
+  final Size imageSize;
+
+  _DetectionPainter({
+    required this.detections,
+    required this.labels,
+    required this.imageSize,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (imageSize.width <= 0 || imageSize.height <= 0) return;
+    final scaleX = size.width / imageSize.width;
+    final scaleY = size.height / imageSize.height;
+
+    for (final detection in detections) {
+      final rect = Rect.fromLTRB(
+        detection.box.left * scaleX,
+        detection.box.top * scaleY,
+        detection.box.right * scaleX,
+        detection.box.bottom * scaleY,
+      );
+
+      final color = _colorForClass(detection.classId);
+      final paint = Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      canvas.drawRect(rect, paint);
+
+      final label = detection.classId < labels.length
+          ? labels[detection.classId]
+          : 'Clase ${detection.classId}';
+      final text = '$label ${(detection.score * 100).toStringAsFixed(1)}%';
+      final textSpan = TextSpan(
+        text: text,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          backgroundColor: Colors.white.withOpacity(0.7),
+        ),
+      );
+      final textPainter = TextPainter(
+        text: textSpan,
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final offset = Offset(rect.left, rect.top - textPainter.height - 4);
+      textPainter.paint(canvas, offset);
+    }
+  }
+
+  Color _colorForClass(int classId) {
+    const colors = [
+      Colors.red,
+      Colors.green,
+      Colors.orange,
+      Colors.blue,
+      Colors.purple,
+    ];
+    return colors[classId % colors.length];
+  }
+
+  @override
+  bool shouldRepaint(covariant _DetectionPainter oldDelegate) {
+    return oldDelegate.detections != detections ||
+        oldDelegate.labels != labels ||
+        oldDelegate.imageSize != imageSize;
+  }
+}
+
+class _LetterboxResult {
+  final img.Image image;
+  final double gain;
+  final double padX;
+  final double padY;
+
+  const _LetterboxResult({
+    required this.image,
+    required this.gain,
+    required this.padX,
+    required this.padY,
   });
 }
 
@@ -52,16 +152,15 @@ class _ReportesPageState extends State<ReportesPage> {
   double? _confianza;
   Interpreter? _interpreter;
   List<String> _labels = [];
+  List<_Detection> _detecciones = [];
+  Size? _imageSize;
+  double _letterboxGain = 1.0;
+  double _letterboxPadX = 0.0;
+  double _letterboxPadY = 0.0;
   int _inputWidth = 224;
   int _inputHeight = 224;
   int _inputChannels = 3;
   bool _inputIsNchw = false;
-
-  @override
-  void initState() {
-    super.initState();
-    cargarModelo(_cultivoCacao);
-  }
 
   @override
   void initState() {
@@ -81,7 +180,9 @@ class _ReportesPageState extends State<ReportesPage> {
       _modeloListo = false;
       _resultado = null;
       _confianza = null;
+      _detecciones = [];
       _image = null;
+      _imageSize = null;
     });
 
     _interpreter?.close();
@@ -140,6 +241,7 @@ class _ReportesPageState extends State<ReportesPage> {
         _loading = true;
         _resultado = null;
         _confianza = null;
+        _detecciones = [];
       });
       await analizarImagen(File(foto.path));
     }
@@ -166,11 +268,11 @@ class _ReportesPageState extends State<ReportesPage> {
         return;
       }
 
-      final resized = img.copyResize(
-        image,
-        width: _inputWidth,
-        height: _inputHeight,
-      );
+      final letterbox = _letterboxResize(image, _inputWidth, _inputHeight);
+      final resized = letterbox.image;
+      _letterboxGain = letterbox.gain;
+      _letterboxPadX = letterbox.padX;
+      _letterboxPadY = letterbox.padY;
 
       dynamic input;
       if (_inputIsNchw) {
@@ -208,40 +310,67 @@ class _ReportesPageState extends State<ReportesPage> {
 
       _interpreter!.run(input, output);
 
-      int maxIdx = 0;
+      int maxIdx = -1;
       double maxConf = 0.0;
+      final detecciones = <_Detection>[];
 
       if (outputShape.length == 2 && outputShape[1] == _labels.length) {
         final results = (output[0] as List).cast<double>();
-        for (int i = 0; i < results.length; i++) {
-          if (results[i] > maxConf) {
-            maxConf = results[i];
+        final normalized = _normalizeScores(results);
+        for (int i = 0; i < normalized.length; i++) {
+          if (normalized[i] > maxConf) {
+            maxConf = normalized[i];
             maxIdx = i;
           }
         }
       } else if (outputShape.length == 3 &&
           outputShape[2] >= 5 + _labels.length) {
-        final detections = output[0] as List;
+        final detections = _normalizeDetectionOutput(output, outputShape);
         for (final det in detections) {
           if (det is! List || det.length < 5 + _labels.length) continue;
-          final objectness = (det[4] as num).toDouble();
+          final objectness = _probability((det[4] as num).toDouble());
+          int bestClass = -1;
+          double bestScore = 0.0;
           for (int c = 0; c < _labels.length; c++) {
-            final classScore = (det[5 + c] as num).toDouble();
+            final classScore = _probability((det[5 + c] as num).toDouble());
             final score = objectness * classScore;
-            if (score > maxConf) {
-              maxConf = score;
-              maxIdx = c;
+            if (score > bestScore) {
+              bestScore = score;
+              bestClass = c;
             }
           }
+          if (bestClass == -1 || bestScore < 0.35) continue;
+          final box = _decodeYoloBox(
+            det,
+            image.width.toDouble(),
+            image.height.toDouble(),
+          );
+          if (box == null) continue;
+          detecciones.add(
+            _Detection(box: box, classId: bestClass, score: bestScore),
+          );
+        }
+        final nmsDetections = _applyNms(detecciones, 0.45);
+        if (nmsDetections.isNotEmpty) {
+          nmsDetections.sort((a, b) => b.score.compareTo(a.score));
+          maxConf = nmsDetections.first.score;
+          maxIdx = nmsDetections.first.classId;
+          detecciones
+            ..clear()
+            ..addAll(nmsDetections);
         }
       }
 
       setState(() {
         _loading = false;
-        _confianza = maxConf;
-        _resultado = maxIdx < _labels.length
+        _confianza = maxIdx == -1 ? null : maxConf;
+        _detecciones = detecciones;
+        _imageSize = Size(image.width.toDouble(), image.height.toDouble());
+        _resultado = maxIdx >= 0 && maxIdx < _labels.length
             ? _labels[maxIdx]
-            : "Clase desconocida";
+            : detecciones.isNotEmpty
+                ? "Clase desconocida"
+                : "Sin detecciones";
       });
     } catch (e) {
       setState(() {
@@ -255,6 +384,133 @@ class _ReportesPageState extends State<ReportesPage> {
     if (conf >= 0.8) return Colors.green;
     if (conf >= 0.5) return Colors.orange;
     return Colors.red;
+  }
+
+  _LetterboxResult _letterboxResize(img.Image image, int width, int height) {
+    final gain =
+        Math.min(width / image.width.toDouble(), height / image.height.toDouble());
+    final newWidth = (image.width * gain).round();
+    final newHeight = (image.height * gain).round();
+    final resized = img.copyResize(image, width: newWidth, height: newHeight);
+    final canvas = img.Image(width: width, height: height);
+    img.fill(canvas, color: img.ColorRgb8(0, 0, 0));
+    final padX = ((width - newWidth) / 2).round();
+    final padY = ((height - newHeight) / 2).round();
+    img.compositeImage(canvas, resized, dstX: padX, dstY: padY);
+    return _LetterboxResult(
+      image: canvas,
+      gain: gain,
+      padX: padX.toDouble(),
+      padY: padY.toDouble(),
+    );
+  }
+
+  double _probability(double value) {
+    if (value >= 0.0 && value <= 1.0) {
+      return value;
+    }
+    return _sigmoid(value);
+  }
+
+  double _sigmoid(double x) {
+    return 1 / (1 + Math.exp(-x));
+  }
+
+  List<List> _normalizeDetectionOutput(
+    List output,
+    List<int> outputShape,
+  ) {
+    if (outputShape.length != 3) {
+      return output[0] as List;
+    }
+    final dim1 = outputShape[1];
+    final dim2 = outputShape[2];
+    if (dim1 < dim2) {
+      final transposed = List.generate(
+        dim2,
+        (i) => List.generate(dim1, (j) => (output[0][j][i] as num).toDouble()),
+      );
+      return transposed;
+    }
+    return output[0] as List;
+  }
+
+  List<double> _normalizeScores(List<double> scores) {
+    final needsNormalization =
+        scores.any((value) => value < 0 || value > 1);
+    if (!needsNormalization) {
+      return scores;
+    }
+    final maxScore = scores.reduce((a, b) => a > b ? a : b);
+    final expScores = scores.map((s) => Math.exp(s - maxScore)).toList();
+    final sumExp = expScores.fold<double>(0.0, (a, b) => a + b);
+    return expScores.map((s) => s / sumExp).toList();
+  }
+
+  Rect? _decodeYoloBox(List det, double imageWidth, double imageHeight) {
+    final rawX = (det[0] as num).toDouble();
+    final rawY = (det[1] as num).toDouble();
+    final rawW = (det[2] as num).toDouble();
+    final rawH = (det[3] as num).toDouble();
+
+    if (rawW <= 0 || rawH <= 0) return null;
+
+    double x = rawX;
+    double y = rawY;
+    double w = rawW;
+    double h = rawH;
+
+    if (x >= 0 && x <= 1 && y >= 0 && y <= 1 && w <= 1 && h <= 1) {
+      x *= _inputWidth;
+      y *= _inputHeight;
+      w *= _inputWidth;
+      h *= _inputHeight;
+    }
+
+    final left = x - w / 2;
+    final top = y - h / 2;
+    final right = x + w / 2;
+    final bottom = y + h / 2;
+
+    final mappedLeft = (left - _letterboxPadX) / _letterboxGain;
+    final mappedTop = (top - _letterboxPadY) / _letterboxGain;
+    final mappedRight = (right - _letterboxPadX) / _letterboxGain;
+    final mappedBottom = (bottom - _letterboxPadY) / _letterboxGain;
+
+    final rect = Rect.fromLTRB(
+      mappedLeft.clamp(0.0, imageWidth),
+      mappedTop.clamp(0.0, imageHeight),
+      mappedRight.clamp(0.0, imageWidth),
+      mappedBottom.clamp(0.0, imageHeight),
+    );
+
+    if (rect.width <= 1 || rect.height <= 1) return null;
+    return rect;
+  }
+
+  List<_Detection> _applyNms(List<_Detection> detections, double iouThreshold) {
+    if (detections.isEmpty) return [];
+    final sorted = List<_Detection>.from(detections)
+      ..sort((a, b) => b.score.compareTo(a.score));
+    final selected = <_Detection>[];
+    while (sorted.isNotEmpty) {
+      final current = sorted.removeAt(0);
+      selected.add(current);
+      sorted.removeWhere(
+        (candidate) => _iou(current.box, candidate.box) > iouThreshold,
+      );
+    }
+    return selected;
+  }
+
+  double _iou(Rect a, Rect b) {
+    final intersection = a.intersect(b);
+    if (intersection.isEmpty) return 0.0;
+    final intersectionArea = intersection.width * intersection.height;
+    final unionArea =
+        (a.width * a.height) + (b.width * b.height) - intersectionArea;
+    if (unionArea <= 0) return 0.0;
+    return intersectionArea / unionArea;
   }
 
   Widget _buildRecomendaciones() {
@@ -479,7 +735,52 @@ class _ReportesPageState extends State<ReportesPage> {
                     child: _image != null
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: Image.file(_image!, fit: BoxFit.cover),
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final imageSize =
+                                    _imageSize ?? const Size(1, 1);
+                                final fitted = applyBoxFit(
+                                  BoxFit.contain,
+                                  imageSize,
+                                  constraints.biggest,
+                                );
+                                final renderSize = fitted.destination;
+                                final dx =
+                                    (constraints.maxWidth - renderSize.width) /
+                                        2;
+                                final dy =
+                                    (constraints.maxHeight - renderSize.height) /
+                                        2;
+
+                                return Stack(
+                                  children: [
+                                    Positioned(
+                                      left: dx,
+                                      top: dy,
+                                      width: renderSize.width,
+                                      height: renderSize.height,
+                                      child: Image.file(
+                                        _image!,
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                    Positioned(
+                                      left: dx,
+                                      top: dy,
+                                      width: renderSize.width,
+                                      height: renderSize.height,
+                                      child: CustomPaint(
+                                        painter: _DetectionPainter(
+                                          detections: _detecciones,
+                                          labels: _labels,
+                                          imageSize: imageSize,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
                           )
                         : Column(
                             mainAxisAlignment: MainAxisAlignment.center,
