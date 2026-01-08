@@ -78,7 +78,8 @@ class _ReportesPageState extends State<ReportesPage> {
     _interpreter = null;
 
     try {
-      _interpreter = await Interpreter.fromAsset('models/best.tflite');
+      final modelData = await rootBundle.load('assets/models/best.tflite');
+      _interpreter = Interpreter.fromBuffer(modelData.buffer.asUint8List());
 
       final labelsData = await rootBundle.loadString(cultivo.labelsPath);
       _labels = labelsData
