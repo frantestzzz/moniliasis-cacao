@@ -359,15 +359,6 @@ class _ReportesPageState extends State<ReportesPage> {
             ..clear()
             ..addAll(nmsDetections);
         }
-        final nmsDetections = _applyNms(detecciones, 0.45);
-        if (nmsDetections.isNotEmpty) {
-          nmsDetections.sort((a, b) => b.score.compareTo(a.score));
-          maxConf = nmsDetections.first.score;
-          maxIdx = nmsDetections.first.classId;
-          detecciones
-            ..clear()
-            ..addAll(nmsDetections);
-        }
       }
 
       setState(() {
@@ -425,23 +416,38 @@ class _ReportesPageState extends State<ReportesPage> {
     return 1 / (1 + Math.exp(-x));
   }
 
-  List<List> _normalizeDetectionOutput(
+  List<List<double>> _normalizeDetectionOutput(
     List output,
     List<int> outputShape,
   ) {
+    final raw = output[0] as List;
     if (outputShape.length != 3) {
-      return output[0] as List;
+      return raw
+          .map(
+            (row) => (row as List)
+                .map((value) => (value as num).toDouble())
+                .toList(),
+          )
+          .toList();
     }
     final dim1 = outputShape[1];
     final dim2 = outputShape[2];
     if (dim1 < dim2) {
-      final transposed = List.generate(
+      return List.generate(
         dim2,
-        (i) => List.generate(dim1, (j) => (output[0][j][i] as num).toDouble()),
+        (i) => List.generate(
+          dim1,
+          (j) => ((raw[j] as List)[i] as num).toDouble(),
+        ),
       );
-      return transposed;
     }
-    return output[0] as List;
+    return raw
+        .map(
+          (row) => (row as List)
+              .map((value) => (value as num).toDouble())
+              .toList(),
+        )
+        .toList();
   }
 
   List<double> _normalizeScores(List<double> scores) {
