@@ -5,7 +5,6 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
 import 'dart:io';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'recomendaciones_helper.dart';
 import '../services/deepseek_chat.dart';
 import 'package:file_picker/file_picker.dart';
@@ -68,6 +67,7 @@ class _ReportesPageState extends State<ReportesPage> {
 
   Future<void> cargarModelo(Cultivo cultivo) async {
     setState(() {
+      _cultivoSeleccionado = cultivo;
       _modeloListo = false;
       _resultado = null;
       _confianza = null;
@@ -78,12 +78,7 @@ class _ReportesPageState extends State<ReportesPage> {
     _interpreter = null;
 
     try {
-      final modelData = await rootBundle.load(cultivo.modeloPath);
-      final tempDir = await getTemporaryDirectory();
-      final modelFile = File('${tempDir.path}/${cultivo.id}_model.tflite');
-      await modelFile.writeAsBytes(modelData.buffer.asUint8List());
-
-      _interpreter = Interpreter.fromFile(modelFile);
+      _interpreter = await Interpreter.fromAsset('models/best.tflite');
 
       final labelsData = await rootBundle.loadString(cultivo.labelsPath);
       _labels = labelsData
@@ -93,7 +88,6 @@ class _ReportesPageState extends State<ReportesPage> {
           .toList();
 
       setState(() {
-        _cultivoSeleccionado = cultivo;
         _modeloListo = true;
       });
 
@@ -431,9 +425,9 @@ class _ReportesPageState extends State<ReportesPage> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                _cultivoSeleccionado == null
-                                    ? 'Primero selecciona un cultivo'
-                                    : 'Selecciona una imagen',
+                                _modeloListo
+                                    ? 'Selecciona una imagen'
+                                    : 'Cargando modelo...',
                                 style: TextStyle(color: Colors.grey[600]),
                               ),
                             ],
