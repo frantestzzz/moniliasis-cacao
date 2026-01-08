@@ -114,6 +114,20 @@ class _DetectionPainter extends CustomPainter {
   }
 }
 
+class _LetterboxResult {
+  final img.Image image;
+  final double gain;
+  final double padX;
+  final double padY;
+
+  const _LetterboxResult({
+    required this.image,
+    required this.gain,
+    required this.padX,
+    required this.padY,
+  });
+}
+
 class ReportesPage extends StatefulWidget {
   const ReportesPage({super.key});
 
@@ -140,6 +154,9 @@ class _ReportesPageState extends State<ReportesPage> {
   List<String> _labels = [];
   List<_Detection> _detecciones = [];
   Size? _imageSize;
+  double _letterboxGain = 1.0;
+  double _letterboxPadX = 0.0;
+  double _letterboxPadY = 0.0;
   int _inputWidth = 224;
   int _inputHeight = 224;
   int _inputChannels = 3;
@@ -251,11 +268,11 @@ class _ReportesPageState extends State<ReportesPage> {
         return;
       }
 
-      final resized = img.copyResize(
-        image,
-        width: _inputWidth,
-        height: _inputHeight,
-      );
+      final letterbox = _letterboxResize(image, _inputWidth, _inputHeight);
+      final resized = letterbox.image;
+      _letterboxGain = letterbox.gain;
+      _letterboxPadX = letterbox.padX;
+      _letterboxPadY = letterbox.padY;
 
       dynamic input;
       if (_inputIsNchw) {
@@ -308,22 +325,39 @@ class _ReportesPageState extends State<ReportesPage> {
         }
       } else if (outputShape.length == 3 &&
           outputShape[2] >= 5 + _labels.length) {
-        final detections = output[0] as List;
+        final detections = _normalizeDetectionOutput(output, outputShape);
         for (final det in detections) {
           if (det is! List || det.length < 5 + _labels.length) continue;
-          final objectness = _sigmoid((det[4] as num).toDouble());
+          final objectness = _probability((det[4] as num).toDouble());
+          int bestClass = -1;
+          double bestScore = 0.0;
           for (int c = 0; c < _labels.length; c++) {
-            final classScore = _sigmoid((det[5 + c] as num).toDouble());
+            final classScore = _probability((det[5 + c] as num).toDouble());
             final score = objectness * classScore;
-            if (score < 0.25) continue;
-            final box = _decodeYoloBox(
-              det,
-              image.width.toDouble(),
-              image.height.toDouble(),
-            );
-            if (box == null) continue;
-            detecciones.add(_Detection(box: box, classId: c, score: score));
+            if (score > bestScore) {
+              bestScore = score;
+              bestClass = c;
+            }
           }
+          if (bestClass == -1 || bestScore < 0.35) continue;
+          final box = _decodeYoloBox(
+            det,
+            image.width.toDouble(),
+            image.height.toDouble(),
+          );
+          if (box == null) continue;
+          detecciones.add(
+            _Detection(box: box, classId: bestClass, score: bestScore),
+          );
+        }
+        final nmsDetections = _applyNms(detecciones, 0.45);
+        if (nmsDetections.isNotEmpty) {
+          nmsDetections.sort((a, b) => b.score.compareTo(a.score));
+          maxConf = nmsDetections.first.score;
+          maxIdx = nmsDetections.first.classId;
+          detecciones
+            ..clear()
+            ..addAll(nmsDetections);
         }
         final nmsDetections = _applyNms(detecciones, 0.45);
         if (nmsDetections.isNotEmpty) {
@@ -361,8 +395,53 @@ class _ReportesPageState extends State<ReportesPage> {
     return Colors.red;
   }
 
+  _LetterboxResult _letterboxResize(img.Image image, int width, int height) {
+    final gain =
+        Math.min(width / image.width.toDouble(), height / image.height.toDouble());
+    final newWidth = (image.width * gain).round();
+    final newHeight = (image.height * gain).round();
+    final resized = img.copyResize(image, width: newWidth, height: newHeight);
+    final canvas = img.Image(width: width, height: height);
+    img.fill(canvas, color: img.ColorRgb8(0, 0, 0));
+    final padX = ((width - newWidth) / 2).round();
+    final padY = ((height - newHeight) / 2).round();
+    img.compositeImage(canvas, resized, dstX: padX, dstY: padY);
+    return _LetterboxResult(
+      image: canvas,
+      gain: gain,
+      padX: padX.toDouble(),
+      padY: padY.toDouble(),
+    );
+  }
+
+  double _probability(double value) {
+    if (value >= 0.0 && value <= 1.0) {
+      return value;
+    }
+    return _sigmoid(value);
+  }
+
   double _sigmoid(double x) {
     return 1 / (1 + Math.exp(-x));
+  }
+
+  List<List> _normalizeDetectionOutput(
+    List output,
+    List<int> outputShape,
+  ) {
+    if (outputShape.length != 3) {
+      return output[0] as List;
+    }
+    final dim1 = outputShape[1];
+    final dim2 = outputShape[2];
+    if (dim1 < dim2) {
+      final transposed = List.generate(
+        dim2,
+        (i) => List.generate(dim1, (j) => (output[0][j][i] as num).toDouble()),
+      );
+      return transposed;
+    }
+    return output[0] as List;
   }
 
   List<double> _normalizeScores(List<double> scores) {
@@ -390,23 +469,28 @@ class _ReportesPageState extends State<ReportesPage> {
     double w = rawW;
     double h = rawH;
 
-    if (x > 1 || y > 1 || w > 1 || h > 1) {
-      x = x / _inputWidth;
-      y = y / _inputHeight;
-      w = w / _inputWidth;
-      h = h / _inputHeight;
+    if (x >= 0 && x <= 1 && y >= 0 && y <= 1 && w <= 1 && h <= 1) {
+      x *= _inputWidth;
+      y *= _inputHeight;
+      w *= _inputWidth;
+      h *= _inputHeight;
     }
 
-    final left = (x - w / 2).clamp(0.0, 1.0);
-    final top = (y - h / 2).clamp(0.0, 1.0);
-    final right = (x + w / 2).clamp(0.0, 1.0);
-    final bottom = (y + h / 2).clamp(0.0, 1.0);
+    final left = x - w / 2;
+    final top = y - h / 2;
+    final right = x + w / 2;
+    final bottom = y + h / 2;
+
+    final mappedLeft = (left - _letterboxPadX) / _letterboxGain;
+    final mappedTop = (top - _letterboxPadY) / _letterboxGain;
+    final mappedRight = (right - _letterboxPadX) / _letterboxGain;
+    final mappedBottom = (bottom - _letterboxPadY) / _letterboxGain;
 
     final rect = Rect.fromLTRB(
-      left * imageWidth,
-      top * imageHeight,
-      right * imageWidth,
-      bottom * imageHeight,
+      mappedLeft.clamp(0.0, imageWidth),
+      mappedTop.clamp(0.0, imageHeight),
+      mappedRight.clamp(0.0, imageWidth),
+      mappedBottom.clamp(0.0, imageHeight),
     );
 
     if (rect.width <= 1 || rect.height <= 1) return null;
