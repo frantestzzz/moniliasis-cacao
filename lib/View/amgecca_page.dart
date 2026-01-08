@@ -359,6 +359,15 @@ class _ReportesPageState extends State<ReportesPage> {
             ..clear()
             ..addAll(nmsDetections);
         }
+        final nmsDetections = _applyNms(detecciones, 0.45);
+        if (nmsDetections.isNotEmpty) {
+          nmsDetections.sort((a, b) => b.score.compareTo(a.score));
+          maxConf = nmsDetections.first.score;
+          maxIdx = nmsDetections.first.classId;
+          detecciones
+            ..clear()
+            ..addAll(nmsDetections);
+        }
       }
 
       setState(() {
