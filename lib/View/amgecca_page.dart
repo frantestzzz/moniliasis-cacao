@@ -64,6 +64,12 @@ class _ReportesPageState extends State<ReportesPage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    cargarModelo(_cultivoCacao);
+  }
+
+  @override
   void dispose() {
     _interpreter?.close();
     super.dispose();
