@@ -118,7 +118,7 @@ class _ReportesPageState extends State<ReportesPage> {
       });
 
       debugPrint(
-        '✅ Modelo ${cultivo.nombre} cargado: ${_labels.length} clases',
+        '✅ Modelo ${cultivo.nombre} cargado: listo para detectar moniliasis',
       );
       debugPrint('🔍 Input shape: $inputShape');
     } catch (e) {
