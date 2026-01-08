@@ -5,7 +5,6 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
 import 'dart:io';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'recomendaciones_helper.dart';
 import '../services/deepseek_chat.dart';
 import 'package:file_picker/file_picker.dart';
@@ -37,51 +36,13 @@ class ReportesPage extends StatefulWidget {
 }
 
 class _ReportesPageState extends State<ReportesPage> {
-  // Lista de cultivos disponibles
-  final List<Cultivo> _cultivos = const [
-    Cultivo(
-      id: 'tomate',
-      nombre: 'Tomate',
-      icono: '🍅',
-      modeloPath: 'assets/modelo_tomate.tflite',
-      labelsPath: 'assets/labels_tomate.txt',
-    ),
-    Cultivo(
-      id: 'platano',
-      nombre: 'Plátano',
-      icono: '🍌',
-      modeloPath: 'assets/modelo_platano.tflite',
-      labelsPath: 'assets/labels_platano.txt',
-    ),
-    Cultivo(
-      id: 'cafe',
-      nombre: 'Café',
-      icono: '☕',
-      modeloPath: 'assets/modelo_cafe.tflite',
-      labelsPath: 'assets/labels_cafe.txt',
-    ),
-    Cultivo(
-      id: 'cacao',
-      nombre: 'Cacao',
-      icono: '🍫',
-      modeloPath: 'assets/modelo_cacao.tflite',
-      labelsPath: 'assets/labels_cacao.txt',
-    ),
-    Cultivo(
-      id: 'maiz',
-      nombre: 'Maíz',
-      icono: '🌽',
-      modeloPath: 'assets/modelo_maiz.tflite',
-      labelsPath: 'assets/labels_maiz.txt',
-    ),
-    Cultivo(
-      id: 'arroz',
-      nombre: 'Arroz',
-      icono: '🌾',
-      modeloPath: 'assets/modelo_arroz.tflite',
-      labelsPath: 'assets/labels_arroz.txt',
-    ),
-  ];
+  static const Cultivo _cultivoCacao = Cultivo(
+    id: 'cacao',
+    nombre: 'Cacao',
+    icono: '🍫',
+    modeloPath: 'assets/models/best.tflite',
+    labelsPath: 'assets/models/labels.txt',
+  );
 
   Cultivo? _cultivoSeleccionado;
   File? _image;
@@ -93,6 +54,12 @@ class _ReportesPageState extends State<ReportesPage> {
   List<String> _labels = [];
 
   @override
+  void initState() {
+    super.initState();
+    cargarModelo(_cultivoCacao);
+  }
+
+  @override
   void dispose() {
     _interpreter?.close();
     super.dispose();
@@ -100,6 +67,7 @@ class _ReportesPageState extends State<ReportesPage> {
 
   Future<void> cargarModelo(Cultivo cultivo) async {
     setState(() {
+      _cultivoSeleccionado = cultivo;
       _modeloListo = false;
       _resultado = null;
       _confianza = null;
@@ -110,12 +78,8 @@ class _ReportesPageState extends State<ReportesPage> {
     _interpreter = null;
 
     try {
-      final modelData = await rootBundle.load(cultivo.modeloPath);
-      final tempDir = await getTemporaryDirectory();
-      final modelFile = File('${tempDir.path}/${cultivo.id}_model.tflite');
-      await modelFile.writeAsBytes(modelData.buffer.asUint8List());
-
-      _interpreter = Interpreter.fromFile(modelFile);
+      final modelData = await rootBundle.load('assets/models/best.tflite');
+      _interpreter = Interpreter.fromBuffer(modelData.buffer.asUint8List());
 
       final labelsData = await rootBundle.loadString(cultivo.labelsPath);
       _labels = labelsData
@@ -125,7 +89,6 @@ class _ReportesPageState extends State<ReportesPage> {
           .toList();
 
       setState(() {
-        _cultivoSeleccionado = cultivo;
         _modeloListo = true;
       });
 
@@ -160,7 +123,7 @@ class _ReportesPageState extends State<ReportesPage> {
     if (_interpreter == null) {
       setState(() {
         _loading = false;
-        _resultado = "Primero selecciona un cultivo";
+        _resultado = "Modelo no disponible";
       });
       return;
     }
@@ -405,73 +368,6 @@ class _ReportesPageState extends State<ReportesPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Selecciona el cultivo:',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          childAspectRatio: 1,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                        ),
-                    itemCount: _cultivos.length,
-                    itemBuilder: (context, index) {
-                      final cultivo = _cultivos[index];
-                      final isSelected = _cultivoSeleccionado?.id == cultivo.id;
-
-                      return GestureDetector(
-                        onTap: () => cargarModelo(cultivo),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? Colors.green[100]
-                                : Colors.grey[100],
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isSelected
-                                  ? Colors.green
-                                  : Colors.grey[300]!,
-                              width: isSelected ? 2 : 1,
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                cultivo.icono,
-                                style: const TextStyle(fontSize: 32),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                cultivo.nombre,
-                                style: TextStyle(
-                                  fontWeight: isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: isSelected
-                                      ? Colors.green[800]
-                                      : Colors.black87,
-                                ),
-                              ),
-                              if (isSelected && _modeloListo)
-                                const Icon(
-                                  Icons.check_circle,
-                                  color: Colors.green,
-                                  size: 16,
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 20),
                   if (_cultivoSeleccionado != null)
                     Container(
                       width: double.infinity,
@@ -530,9 +426,9 @@ class _ReportesPageState extends State<ReportesPage> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                _cultivoSeleccionado == null
-                                    ? 'Primero selecciona un cultivo'
-                                    : 'Selecciona una imagen',
+                                _modeloListo
+                                    ? 'Selecciona una imagen'
+                                    : 'Cargando modelo...',
                                 style: TextStyle(color: Colors.grey[600]),
                               ),
                             ],

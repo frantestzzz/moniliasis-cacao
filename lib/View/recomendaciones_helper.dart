@@ -132,47 +132,27 @@ class RecomendacionesHelper {
     ),
 
     // 🍫 CACAO
-    'Cacao_Podredumbre_negra': Recomendacion(
-      enfermedad: 'Podredumbre Negra',
-      descripcion: 'Causada por Phytophthora palmivora, afecta mazorcas.',
+    'Cacao_Monilia': Recomendacion(
+      enfermedad: 'Monilia',
+      descripcion:
+          'Enfermedad causada por Moniliophthora roreri que afecta las mazorcas.',
       sintomas: [
-        'Manchas oscuras en mazorcas',
-        'Pudrición interna',
-        'Pérdida total del fruto',
+        'Manchas blanquecinas o amarillentas en la mazorca',
+        'Polvo blanquecino (esporas) en la superficie',
+        'Pudrición interna del grano',
       ],
       tratamientos: [
-        'Fungicidas cúpricos: Hidróxido de cobre (3 g/L)',
-        'Metalaxyl + Mancozeb',
-        'Fosetyl-Al (2.5 g/L)',
+        'Retirar y destruir mazorcas enfermas',
+        'Aplicar fungicidas preventivos: Cúpricos o Mancozeb',
+        'Monitoreo y aplicaciones en época lluviosa',
       ],
       prevencion: [
-        'Podar ramas bajas',
-        'Mejorar drenaje del suelo',
-        'Cosechar frecuentemente',
+        'Podas para mejorar ventilación',
+        'Recolección frecuente de mazorcas maduras',
+        'Manejo adecuado de sombra y humedad',
       ],
       icono: Icons.coronavirus,
-      color: Colors.black87,
-    ),
-    'Cacao_Barrenador': Recomendacion(
-      enfermedad: 'Barrenador del Fruto',
-      descripcion: 'Larvas de insectos que perforan las mazorcas.',
-      sintomas: [
-        'Orificios en la cáscara',
-        'Galerías internas',
-        'Fermentación prematura',
-      ],
-      tratamientos: [
-        'Insecticidas: Clorpirifos',
-        'Lambda-cialotrina (0.5 ml/L)',
-        'Control cultural: eliminación de frutos',
-      ],
-      prevencion: [
-        'Cosechar regularmente',
-        'Eliminar frutos enfermos',
-        'Mantener limpieza del cultivo',
-      ],
-      icono: Icons.pest_control,
-      color: Colors.brown[800]!,
+      color: Colors.brown,
     ),
 
     // 🌾 ARROZ
@@ -491,7 +471,7 @@ class RecomendacionesHelper {
       icono: Icons.check_circle,
       color: Colors.green,
     ),
-    'Cacao_Saludable': Recomendacion(
+    'Cacao_Sana': Recomendacion(
       enfermedad: '¡Planta Saludable!',
       descripcion: 'Tu planta de cacao está en excelente estado.',
       sintomas: [

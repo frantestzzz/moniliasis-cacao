@@ -66,23 +66,5 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/modelo_tomate.tflite
-    - assets/labels_tomate.txt
-    - assets/modelo_platano.tflite
-    - assets/labels_platano.txt
-    - assets/modelo_cafe.tflite
-    - assets/labels_cafe.txt
-    - assets/modelo_cacao.tflite
-    - assets/labels_cacao.txt
-    - assets/modelo_maiz.tflite
-    - assets/labels_maiz.txt
-    - assets/modelo_arroz.tflite
-    - assets/labels_arroz.txt
-    - assets/manual_usuario.pdf
-    - assets/videos/
-    - assets/guias/
-    - assets/guias/cacao_guia.pdf
-    - assets/guias/cafe_guia.pdf
-    - assets/guias/maiz_guia.pdf
-    - assets/guias/platano_guia.pdf
-    - assets/guias/tomate_guia.pdf
+    - assets/models/best.tflite
+    - assets/models/labels.txt
