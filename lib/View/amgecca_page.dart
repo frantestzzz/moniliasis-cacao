@@ -161,13 +161,6 @@ class _ReportesPageState extends State<ReportesPage> {
   int _inputHeight = 224;
   int _inputChannels = 3;
   bool _inputIsNchw = false;
-
-  @override
-  void initState() {
-    super.initState();
-    cargarModelo(_cultivoCacao);
-  }
-
   @override
   void dispose() {
     _interpreter?.close();
