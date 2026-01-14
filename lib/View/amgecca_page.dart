@@ -323,8 +323,7 @@ class _ReportesPageState extends State<ReportesPage> {
             maxIdx = i;
           }
         }
-      } else if (outputShape.length == 3 &&
-          outputShape[2] >= 5 + _labels.length) {
+      } else if (outputShape.length == 3) {
         final detections = _normalizeDetectionOutput(output, outputShape);
         for (final det in detections) {
           if (det is! List || det.length < 5 + _labels.length) continue;
@@ -339,7 +338,7 @@ class _ReportesPageState extends State<ReportesPage> {
               bestClass = c;
             }
           }
-          if (bestClass == -1 || bestScore < 0.35) continue;
+          if (bestClass == -1 || bestScore < 0.2) continue;
           final box = _decodeYoloBox(
             det,
             image.width.toDouble(),
